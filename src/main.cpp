@@ -122,6 +122,36 @@ void autonomous() {
     drive_inches(-12, 100); // Back up 12 inches
 }
 
+// --- Driver Control Constants ---
+// 0.0 is linear (normal). 1.0 is maximum curve (very slow at low stick movements).
+// 0.5 is a great starting point for VEX robots.
+const double CURVE_SCALE = 0.5; 
+
+// Any joystick movement between -5 and 5 is ignored. Fixes stick drift / motor whining.
+const int DEADBAND = 5; 
+
+// --- Driver Helper Functions ---
+
+/**
+ * Applies a tuneable exponential curve to the joystick input.
+ * @param input Raw joystick value (-127 to 127)
+ * @param scale How aggressive the curve is (0.0 to 1.0)
+ * @return Curved motor output (-127 to 127)
+ */
+int apply_drive_curve(int input, double scale) {
+    // 1. Check Deadband
+    if (std::abs(input) < DEADBAND) {
+        return 0;
+    }
+    
+    // 2. Apply Curve Math
+    double x = input;
+    // Formula: output = scale * (x^3 / 127^2) + (1 - scale) * x
+    double output = (scale * (std::pow(x, 3) / 16129.0)) + ((1.0 - scale) * x);
+    
+    return (int)output;
+}
+
 // --- Driver Control ---
 void opcontrol() {
     bool piston_state = false;
@@ -136,8 +166,13 @@ void opcontrol() {
         int left_power = master.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
         int right_power = master.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_Y);
 
-        left_drive.move(left_power);
-        right_drive.move(right_power);
+        // Pass the raw joystick values through our curve function
+        int curved_left = apply_drive_curve(raw_left, CURVE_SCALE);
+        int curved_right = apply_drive_curve(raw_right, CURVE_SCALE);
+
+        left_drive.move(curved_left);
+        right_drive.move(curved_right);
+
 
         // --- NEW: Read Lift Position for Interlocks ---
         double lift_pos = lift_1.get_position();
